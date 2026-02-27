@@ -20,5 +20,5 @@ CREATE INDEX IF NOT EXISTS idx_data_document_embeddings_ref_doc
 
 -- Create app user and grant only what it needs
 CREATE USER app_user WITH PASSWORD 'your_password';
-GRANT CONNECT ON DATABASE vertex_ai_db TO vertex_app_user;
-GRANT SELECT, INSERT, UPDATE, DELETE ON data_document_embeddings TO vertex_app_user;
+GRANT CONNECT ON DATABASE ai_db TO app_user;
+GRANT SELECT, INSERT, UPDATE, DELETE ON data_document_embeddings TO app_user;
