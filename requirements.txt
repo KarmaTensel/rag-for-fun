@@ -13,6 +13,7 @@ llama-index-readers-file
 pypdf>=4.2.0
 python-docx>=1.1.2
 docx2txt>=0.8
+docling>=2.3.0
 
 # DB
 psycopg[binary]>=3.2.3
