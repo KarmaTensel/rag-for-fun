@@ -6,7 +6,7 @@ File ingestion pipeline:
   2. Parse the file:
      - PDFs → Docling (preserves table structure as Markdown)
      - Other formats → LlamaIndex SimpleDirectoryReader
-  3. Table-aware chunking (keeps Markdown tables intact)
+  3. Hybrid chunking: semantic splitting for prose, table-aware for tables
   4. OpenAI embeds each chunk
   5. Our code inserts rows into pgvector — LlamaIndex never writes
 
@@ -21,7 +21,7 @@ import tempfile
 from pathlib import Path
 
 from llama_index.core import SimpleDirectoryReader
-from llama_index.core.node_parser import SentenceSplitter
+from llama_index.core.node_parser import SentenceSplitter, SemanticSplitterNodeParser
 from llama_index.core.schema import TextNode, Document
 from app.config import settings, get_embed_model
 from app.db.write_conn import insert_nodes, delete_doc_nodes
@@ -36,6 +36,12 @@ embed_model = get_embed_model()
 splitter = SentenceSplitter(
     chunk_size=settings.chunk_size,
     chunk_overlap=settings.chunk_overlap,
+)
+
+semantic_splitter = SemanticSplitterNodeParser(
+    buffer_size=1,
+    breakpoint_percentile_threshold=95,
+    embed_model=embed_model,
 )
 
 def _dedup_lines(text: str) -> str:
@@ -100,11 +106,12 @@ def _split_table_at_rows(table_text: str, max_tokens: int) -> list[str]:
 
 
 def _split_with_table_awareness(documents: list[Document]) -> list[TextNode]:
-    """Split documents while keeping Markdown tables intact.
+    """Split documents with hybrid chunking strategy.
 
     Segments text into prose and table blocks. Prose is chunked with
-    SentenceSplitter; tables are kept whole (or split at row boundaries
-    if they exceed TABLE_CHUNK_MAX_TOKENS).
+    SemanticSplitterNodeParser (groups semantically related sentences);
+    tables are kept whole (or split at row boundaries if they exceed
+    TABLE_CHUNK_MAX_TOKENS).
     """
     all_nodes: list[TextNode] = []
 
@@ -141,7 +148,7 @@ def _split_with_table_awareness(documents: list[Document]) -> list[TextNode]:
             else:
                 # Prose — use standard sentence splitter
                 prose_doc = Document(text=segment_stripped, metadata=metadata)
-                prose_nodes = splitter.get_nodes_from_documents([prose_doc])
+                prose_nodes = semantic_splitter.get_nodes_from_documents([prose_doc])
                 all_nodes.extend(prose_nodes)
 
     return all_nodes
