@@ -41,7 +41,7 @@ splitter = SentenceSplitter(
 semantic_splitter = SemanticSplitterNodeParser(
     buffer_size=1,
     breakpoint_percentile_threshold=95,
-    embed_model=embed_model,
+    embed_model=embed_model
 )
 
 def _dedup_lines(text: str) -> str:
@@ -154,7 +154,7 @@ def _split_with_table_awareness(documents: list[Document]) -> list[TextNode]:
     return all_nodes
 
 
-async def ingest_file(filename: str, file_bytes: bytes) -> dict:
+async def ingest_file(filename: str, file_bytes: bytes, user_access: list[str], metadata: dict = {}) -> dict:
     ext = Path(filename).suffix.lower()
     if ext not in SUPPORTED_EXTENSIONS:
         raise ValueError(f"Unsupported file type: {ext}. Supported: {SUPPORTED_EXTENSIONS}")
@@ -197,9 +197,10 @@ async def ingest_file(filename: str, file_bytes: bytes) -> dict:
             "id":        str(uuid.uuid4()),
             "embedding": embedding,
             "text":      node.get_content(),
-            "metadata_": {**node.metadata, "filename": filename},
-            "node_id":    node.node_id,
-            "ref_doc_id": ref_doc_id,
+            "metadata_":    {**node.metadata, "filename": filename, **metadata},
+            "node_id":      node.node_id,
+            "ref_doc_id":   ref_doc_id,
+            "user_access":  user_access
         })
 
     insert_nodes(rows)
@@ -208,11 +209,11 @@ async def ingest_file(filename: str, file_bytes: bytes) -> dict:
         "filename":   filename,
         "ref_doc_id": ref_doc_id,
         "chunks":     len(rows),
-        "pages":      len(documents),
+        "pages":      len(documents)
     }
 
 
-async def ingest_text(content: str, ref_doc_id: str, metadata: dict = {}) -> dict:
+async def ingest_text(content: str, ref_doc_id: str, user_access: list[str], metadata: dict = {}) -> dict:
     if not content.strip():
         raise ValueError("Content cannot be empty.")
     if not ref_doc_id.strip():
@@ -233,17 +234,18 @@ async def ingest_text(content: str, ref_doc_id: str, metadata: dict = {}) -> dic
     rows = []
     for node, embedding in zip(nodes, embeddings):
         rows.append({
-            "id":        str(uuid.uuid4()),
-            "embedding": embedding,
-            "text":      node.get_content(),
-            "metadata_": {**node.metadata, **metadata},
-            "node_id":    node.node_id,
-            "ref_doc_id": ref_doc_id,
+            "id":           str(uuid.uuid4()),
+            "embedding":    embedding,
+            "text":         node.get_content(),
+            "metadata_":    {**node.metadata, **metadata},
+            "node_id":      node.node_id,
+            "ref_doc_id":   ref_doc_id,
+            "user_access":  user_access
         })
 
     insert_nodes(rows)
 
     return {
         "ref_doc_id": ref_doc_id,
-        "chunks":     len(rows),
+        "chunks":     len(rows)
     }

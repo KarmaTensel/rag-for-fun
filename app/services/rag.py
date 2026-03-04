@@ -18,8 +18,8 @@ If the answer is found, dont include phrases or expression like "According to pr
 Do not make up information or use knowledge outside of the provided context.
 If the user refers to something from the conversation history, use it to understand their intent but still ground your answer in the provided context."""
 
-async def rag_query(query: str, top_k: int = 7, chat_history: list[dict] | None = None) -> dict:
-    chunks = await semantic_search(query, top_k=top_k)
+async def rag_query(query: str, user_access: list[str], top_k: int = 7, chat_history: list[dict] | None = None) -> dict:
+    chunks = await semantic_search(query, user_access=user_access, top_k=top_k)
 
     if not chunks:
         return {

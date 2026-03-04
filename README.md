@@ -9,29 +9,29 @@ A FastAPI service that ingests documents, generates OpenAI embeddings, stores th
                         │              FastAPI App                │
                         │                                         │
                         │  POST /ingest    POST /search           │
-                        └────────┬─────────────┬──────────────────┘
-                                 │             │
-                    ┌────────────▼──┐     ┌────▼──────────────┐
+                        └────────┬──────────────┬─────────────────┘
+                                 │              │
+                    ┌────────────▼───┐     ┌────▼──────────────┐
                     │IngestionService│     │ RetrievalService  │
-                    │               │     │                   │
-                    │ LlamaIndex    │     │ LlamaIndex        │
-                    │  - parse      │     │  - embed query    │
-                    │  - chunk      │     │  - cosine search  │
-                    │  - embed      │     │                   │
-                    └──────┬────────┘     └──────┬────────────┘
-                           │                     │
-                    ┌──────▼──────┐       ┌──────▼──────┐
-                    │  Write DB   │       │  Read-only  │
-                    │ (psycopg2)  │       │  DB conn    │
-                    │  INSERT     │       │  (pgvector) │
-                    └─────────────┘       └─────────────┘
-                           │                     │
-                    └───────────────┬─────────────┘
-                                    │
-                          ┌─────────▼─────────┐
-                          │   PostgreSQL DB   │
-                          │   + pgvector      │
-                          └───────────────────┘
+                    │                │     │                   │
+                    │ LlamaIndex     │     │ LlamaIndex        │
+                    │  - parse       │     │  - embed query    │
+                    │  - chunk       │     │  - cosine search  │
+                    │  - embed       │     │                   │
+                    └──────┬─────────┘     └──────┬────────────┘
+                           │                      │
+                    ┌──────▼──────┐        ┌──────▼──────┐
+                    │  Write DB   │        │  Read-only  │
+                    │ (psycopg2)  │        │  DB conn    │
+                    │  INSERT     │        │  (pgvector) │
+                    └─────────────┘        └─────────────┘
+                           │                      │
+                           └────────────┬─────────┘
+                                        │
+                              ┌─────────▼─────────┐
+                              │   PostgreSQL DB   │
+                              │   + pgvector      │
+                              └───────────────────┘
 ```
 
 **Key design**: LlamaIndex only gets a **read-only** DB connection. All writes go through our own `psycopg2` connection.
@@ -44,9 +44,9 @@ Create DB user:
 
 ```sql
 -- User for ingestion service and LlamaIndex query service
-CREATE USER app_user WITH PASSWORD 'password';
-GRANT CONNECT ON DATABASE ai_db TO app_user;
-GRANT SELECT, INSERT, UPDATE, DELETE ON data_document_embeddings TO app_user;
+CREATE USER vertex_app_user WITH PASSWORD 'password';
+GRANT CONNECT ON DATABASE vertex_ai_db TO vertex_app_user;
+GRANT SELECT, INSERT, UPDATE, DELETE ON data_document_embeddings TO vertex_app_user;
 
 -- Check grants on specific table
 \z data_document_embeddings
@@ -59,7 +59,6 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON data_document_embeddings TO app_user;
 
 ```bash
 cp .env.example .env
-# Fill in your values
 ```
 
 ### 3. Install & Run
@@ -78,62 +77,76 @@ uvicorn app.main:app --reload --port 8000
 ## API Endpoints
 
 ### `POST /ingest/`
-Upload a single document.
+Upload a single document with access metadata.
 
 ```bash
 curl -X POST http://localhost:8000/ingest/ \
   -H "X-API-Key: api_key" \
-  -F "file=file_path"
-```
-
-**Response:**
-```json
-{
-  "status": "success",
-  "message": "Document 'document.pdf' ingested successfully.",
-  "details": {
-    "filename": "document.pdf",
-    "ref_doc_id": "document.pdf",
-    "chunks": 24,
-    "pages": 5
-  }
-}
+  -F "file=@report.pdf" \
+  -F "user_access=company1,company2" \
+  -F "klass=Company" \
+  -F "record_id=42"
 ```
 
 ### `POST /ingest/batch`
-Upload multiple documents at once.
+Upload multiple documents with shared access metadata.
 
 ```bash
 curl -X POST http://localhost:8000/ingest/batch \
+  -H "X-API-Key: api_key" \
   -F "files=@doc1.pdf" \
-  -F "files=@doc2.docx"
+  -F "files=@doc2.docx" \
+  -F "user_access=company1" \
+  -F "klass=Company" \
+  -F "record_id=42"
+```
+
+### `POST /ingest/text`
+Ingest raw text (e.g. DB record summaries from Rails).
+
+```bash
+curl -X POST http://localhost:8000/ingest/text \
+  -H "X-API-Key: api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "Customer policy text...",
+    "ref_doc_id": "policy-2024",
+    "user_access": ["company1", "company2"],
+    "klass": "Policy",
+    "record_id": "99"
+  }'
 ```
 
 ### `POST /search/`
-Semantic search across all ingested documents.
+Scoped semantic search.
+
+```bash
+curl -X POST http://localhost:8000/search/ \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: api_key" \
+  -d '{
+    "query": "what is the refund policy?",
+    "top_k": 5,
+    "user_access": ["company1", "company2"]
+  }'
+```
+
+### `POST /query/`
+RAG — scoped search + GPT answer generation.
 
 ```bash
 curl -X POST http://localhost:8000/query/ \
   -H "Content-Type: application/json" \
   -H "X-API-Key: api_key" \
-  -d '{"query": "who was first person to walk on the moon?", "top_k": 5}'
-```
-
-**Response:**
-```json
-{
-  "query": "what is the refund policy?",
-  "top_k": 5,
-  "results": [
-    {
-      "text": "Customers may request a refund within 30 days...",
-      "score": 0.9231,
-      "metadata": { "filename": "policy.pdf", "page_label": "3" },
-      "node_id": "abc-123",
-      "ref_doc_id": "policy.pdf"
-    }
-  ]
-}
+  -d '{
+    "query": "What is the refund policy?",
+    "top_k": 5,
+    "user_access": ["company1"],
+    "chat_history": [
+      {"role": "user", "content": "Hello"},
+      {"role": "assistant", "content": "Hi, how can I help?"}
+    ]
+  }'
 ```
 
 ### `GET /health`
@@ -160,6 +173,7 @@ CREATE TABLE data_document_embeddings (
     embedding   VECTOR(1536),       -- ada-002 dimensions
     text        TEXT NOT NULL,
     metadata_   JSONB,
+    user_access TEXT[],
     node_id     VARCHAR,
     ref_doc_id  VARCHAR             -- maps to original filename
 );
