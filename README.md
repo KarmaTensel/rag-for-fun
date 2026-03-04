@@ -44,9 +44,9 @@ Create DB user:
 
 ```sql
 -- User for ingestion service and LlamaIndex query service
-CREATE USER vertex_app_user WITH PASSWORD 'password';
-GRANT CONNECT ON DATABASE vertex_ai_db TO vertex_app_user;
-GRANT SELECT, INSERT, UPDATE, DELETE ON data_document_embeddings TO vertex_app_user;
+CREATE USER app_user WITH PASSWORD 'password';
+GRANT CONNECT ON DATABASE ai_db TO app_user;
+GRANT SELECT, INSERT, UPDATE, DELETE ON data_document_embeddings TO app_user;
 
 -- Check grants on specific table
 \z data_document_embeddings
