@@ -1,29 +1,23 @@
 """
 Retrieval service.
-LlamaIndex embeds the query and performs cosine similarity search
-against stored embeddings via the read-only pgvector connection.
+Embeds the query and performs cosine similarity search via pgvector,
+filtered by user_access.
 
 Post-retrieval pipeline:
-  1. SimilarityPostprocessor — drops chunks below a score threshold.
+  1. Score threshold — drops chunks below a similarity cutoff.
   2. Content-based dedup — removes near-duplicate text (normalized prefix match)
      while preserving distinct chunks from the same document.
 """
 
 import hashlib
 
-from llama_index.core import VectorStoreIndex
-from llama_index.core.postprocessor import SimilarityPostprocessor
-from llama_index.core.retrievers import VectorIndexRetriever
-
 from app.config import get_embed_model
-from app.db.read_conn import get_vector_store
+from app.db.read_conn import scoped_vector_search
 
 embed_model = get_embed_model()
 
 SIMILARITY_CUTOFF = 0.35
 DEDUP_PREFIX_LENGTH = 256
-
-similarity_filter = SimilarityPostprocessor(similarity_cutoff=SIMILARITY_CUTOFF)
 
 def _content_hash(text: str) -> str:
     """Hash the first N chars of whitespace-normalised text."""
@@ -31,44 +25,38 @@ def _content_hash(text: str) -> str:
     return hashlib.md5(normalised.encode()).hexdigest()
 
 
-def _deduplicate(nodes):
-    """Remove nodes whose leading content is identical."""
+def _deduplicate(results: list[dict]) -> list[dict]:
+    """Remove results whose leading content is identical."""
     seen: set[str] = set()
     unique = []
-    for node in nodes:
-        h = _content_hash(node.node.get_content())
+    for r in results:
+        h = _content_hash(r["text"])
         if h not in seen:
             seen.add(h)
-            unique.append(node)
+            unique.append(r)
     return unique
 
 
-async def semantic_search(query: str, top_k: int = 7) -> list[dict]:
-    vector_store = get_vector_store()
+async def semantic_search(query: str, user_access: list[str], top_k: int = 7) -> list[dict]:
+    query_embedding = await embed_model.aget_text_embedding(query)
 
-    index = VectorStoreIndex.from_vector_store(
-        vector_store=vector_store,
-        embed_model=embed_model,
+    results = scoped_vector_search(
+        query_embedding=query_embedding,
+        user_access=user_access,
+        top_k=top_k,
     )
 
-    retriever = VectorIndexRetriever(
-        index=index,
-        similarity_top_k=top_k,
-    )
-
-    nodes = await retriever.aretrieve(query)
-
-    # Post-retrieval: filter low-quality results, then deduplicate
-    nodes = similarity_filter.postprocess_nodes(nodes)
-    nodes = _deduplicate(nodes)
+    # this does SimilarityPostprocessor alike mechanism
+    results = [r for r in results if r["score"] >= SIMILARITY_CUTOFF]
+    results = _deduplicate(results)
 
     return [
         {
-            "text":       node.node.get_content(),
-            "score":      round(node.score or 0.0, 4),
-            "metadata":   node.node.metadata,
-            "node_id":    node.node.node_id,
-            "ref_doc_id": node.node.ref_doc_id,
+            "text":       r["text"],
+            "score":      round(r["score"], 4),
+            "metadata":   r["metadata_"],
+            "node_id":    r["node_id"],
+            "ref_doc_id": r["ref_doc_id"],
         }
-        for node in nodes
+        for r in results
     ]

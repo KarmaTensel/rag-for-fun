@@ -21,8 +21,9 @@ class ChatMessage(BaseModel):
 
 
 class QueryRequest(BaseModel):
-    query: str = Field(..., min_length=1)
-    top_k: int = Field(7, ge=1, le=20)
+    query:        str = Field(..., min_length=1)
+    top_k:        int = Field(7, ge=1, le=20)
+    user_access:  list[str] = Field(..., min_length=1)
     chat_history: Optional[list[ChatMessage]] = None
 
 
@@ -44,7 +45,12 @@ class QueryResponse(BaseModel):
 async def query(request: QueryRequest):
     try:
         history = [msg.model_dump() for msg in request.chat_history] if request.chat_history else None
-        result = await rag_query(request.query, top_k=request.top_k, chat_history=history)
+        result = await rag_query(
+            request.query,
+            user_access=request.user_access,
+            top_k=request.top_k,
+            chat_history=history,
+        )
         return QueryResponse(
             query=request.query,
             answer=result["answer"],

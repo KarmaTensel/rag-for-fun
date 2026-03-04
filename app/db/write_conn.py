@@ -21,14 +21,15 @@ def insert_nodes(nodes: list[dict]):
 
     sql = f"""
         INSERT INTO {DB_TABLE_NAME}
-            (id, embedding, text, metadata_, node_id, ref_doc_id)
-        VALUES (%s, %s, %s, %s, %s, %s)
+            (id, embedding, text, metadata_, node_id, ref_doc_id, user_access)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (id) DO UPDATE SET
-            embedding  = EXCLUDED.embedding,
-            text       = EXCLUDED.text,
-            metadata_  = EXCLUDED.metadata_,
-            node_id    = EXCLUDED.node_id,
-            ref_doc_id = EXCLUDED.ref_doc_id
+            embedding   = EXCLUDED.embedding,
+            text        = EXCLUDED.text,
+            metadata_   = EXCLUDED.metadata_,
+            node_id     = EXCLUDED.node_id,
+            ref_doc_id  = EXCLUDED.ref_doc_id,
+            user_access = EXCLUDED.user_access
     """
 
     rows = [
@@ -39,6 +40,7 @@ def insert_nodes(nodes: list[dict]):
             Jsonb(n["metadata_"]),
             n["node_id"],
             n["ref_doc_id"],
+            n["user_access"],
         )
         for n in nodes
     ]
