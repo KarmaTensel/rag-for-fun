@@ -20,11 +20,17 @@ import uuid
 import tempfile
 from pathlib import Path
 
+from openai import AsyncOpenAI
 from llama_index.core import SimpleDirectoryReader
 from llama_index.core.node_parser import SentenceSplitter, SemanticSplitterNodeParser
 from llama_index.core.schema import TextNode, Document
 from app.config import settings, get_embed_model
 from app.db.write_conn import insert_nodes, delete_doc_nodes
+
+llm_client = AsyncOpenAI(
+    api_key=settings.openai_api_key,
+    base_url=settings.openai_base_url,
+)
 
 SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt", ".md", ".csv", ".html"}
 
@@ -213,13 +219,36 @@ async def ingest_file(filename: str, file_bytes: bytes, user_access: list[str], 
     }
 
 
+REFINE_PROMPT = (
+    "You are a data-preparation assistant. "
+    "Rewrite the following raw structured data into clear, fluent natural-language sentences. "
+    "Preserve every fact — do not add, infer, or omit information. "
+    "Output only the rewritten text, nothing else."
+)
+
+
+async def refine_text_for_embedding(raw_text: str) -> str:
+    """Use an LLM to rephrase raw structured text into natural language."""
+    response = await llm_client.chat.completions.create(
+        model=settings.gpt_model,
+        messages=[
+            {"role": "system", "content": REFINE_PROMPT},
+            {"role": "user", "content": raw_text},
+        ],
+        temperature=0,
+    )
+    return response.choices[0].message.content
+
+
 async def ingest_text(content: str, ref_doc_id: str, user_access: list[str], metadata: dict = {}) -> dict:
     if not content.strip():
         raise ValueError("Content cannot be empty.")
     if not ref_doc_id.strip():
         raise ValueError("ref_doc_id cannot be empty.")
 
-    document = Document(text=content, metadata={"ref_doc_id": ref_doc_id, **metadata})
+    refined_content = await refine_text_for_embedding(content)
+
+    document = Document(text=refined_content, metadata={"ref_doc_id": ref_doc_id, **metadata})
 
     delete_doc_nodes(ref_doc_id)
 
