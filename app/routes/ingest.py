@@ -65,7 +65,7 @@ async def ingest_batch(
 
 class TextIngestRequest(BaseModel):
     content:     str
-    ref_doc_id:  str
+    ref_doc_id:  str | None = None
     user_access: list[str] = Field(..., min_length=1)
     klass:       str
     record_id:   str
@@ -75,12 +75,13 @@ class TextIngestRequest(BaseModel):
 @router.post("/text", summary="Ingest raw text (e.g. DB record summaries from Rails)")
 async def ingest_text_endpoint(payload: TextIngestRequest):
     try:
+        ref_doc_id = payload.ref_doc_id or f"{payload.klass}_{payload.record_id}"
         meta = {"klass": payload.klass, "record_id": payload.record_id, **payload.metadata}
         result = await ingest_text(
             content=payload.content,
-            ref_doc_id=payload.ref_doc_id,
+            ref_doc_id=ref_doc_id,
             user_access=payload.user_access,
-            metadata=meta,
+            metadata=meta
         )
         return JSONResponse(status_code=200, content={
             "status":  "success",
