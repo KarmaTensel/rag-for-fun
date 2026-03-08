@@ -184,7 +184,7 @@ async def ingest_file(filename: str, file_bytes: bytes, user_access: list[str], 
         raise ValueError("No content could be extracted from the file.")
 
     ref_doc_id = filename
-    delete_doc_nodes(ref_doc_id)
+    await delete_doc_nodes(ref_doc_id)
 
     if ext == ".pdf":
         nodes = _split_with_table_awareness(documents)
@@ -209,7 +209,7 @@ async def ingest_file(filename: str, file_bytes: bytes, user_access: list[str], 
             "user_access":  user_access
         })
 
-    insert_nodes(rows)
+    await insert_nodes(rows)
 
     return {
         "filename":   filename,
@@ -250,7 +250,7 @@ async def ingest_text(content: str, ref_doc_id: str, user_access: list[str], met
 
     document = Document(text=refined_content, metadata={"ref_doc_id": ref_doc_id, **metadata})
 
-    delete_doc_nodes(ref_doc_id)
+    await delete_doc_nodes(ref_doc_id)
 
     nodes = splitter.get_nodes_from_documents([document])
 
@@ -272,7 +272,7 @@ async def ingest_text(content: str, ref_doc_id: str, user_access: list[str], met
             "user_access":  user_access
         })
 
-    insert_nodes(rows)
+    await insert_nodes(rows)
 
     return {
         "ref_doc_id": ref_doc_id,

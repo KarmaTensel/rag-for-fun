@@ -40,7 +40,7 @@ def _deduplicate(results: list[dict]) -> list[dict]:
 async def semantic_search(query: str, user_access: list[str], top_k: int = 7) -> list[dict]:
     query_embedding = await embed_model.aget_text_embedding(query)
 
-    results = scoped_vector_search(
+    results = await scoped_vector_search(
         query_embedding=query_embedding,
         user_access=user_access,
         top_k=top_k,
