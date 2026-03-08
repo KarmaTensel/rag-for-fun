@@ -17,12 +17,12 @@ async def insert_nodes(nodes: list[dict]):
 
     sql = f"""
         INSERT INTO {DB_TABLE_NAME}
-            (id, embedding, text, metadata_, node_id, ref_doc_id, user_access)
+            (id, embedding, text, metadata, node_id, ref_doc_id, user_access)
         VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7)
         ON CONFLICT (id) DO UPDATE SET
             embedding   = EXCLUDED.embedding,
             text        = EXCLUDED.text,
-            metadata_   = EXCLUDED.metadata_,
+            metadata   = EXCLUDED.metadata,
             node_id     = EXCLUDED.node_id,
             ref_doc_id  = EXCLUDED.ref_doc_id,
             user_access = EXCLUDED.user_access
@@ -33,7 +33,7 @@ async def insert_nodes(nodes: list[dict]):
             n["id"],
             n["embedding"],
             n["text"],
-            json.dumps(n["metadata_"]),
+            json.dumps(n["metadata"]),
             n["node_id"],
             n["ref_doc_id"],
             n["user_access"],

@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS data_document_embeddings (
     embedding   VECTOR(768),
     text        TEXT NOT NULL,
     user_access TEXT[],
-    metadata_   JSONB DEFAULT '{}'::jsonb,
+    metadata   JSONB DEFAULT '{}'::jsonb,
     node_id     VARCHAR,
     ref_doc_id  VARCHAR
 );

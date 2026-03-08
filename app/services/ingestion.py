@@ -203,7 +203,7 @@ async def ingest_file(filename: str, file_bytes: bytes, user_access: list[str], 
             "id":        str(uuid.uuid4()),
             "embedding": embedding,
             "text":      node.get_content(),
-            "metadata_":    {**node.metadata, "filename": filename, **metadata},
+            "metadata":    {**node.metadata, "filename": filename, **metadata},
             "node_id":      node.node_id,
             "ref_doc_id":   ref_doc_id,
             "user_access":  user_access
@@ -266,7 +266,7 @@ async def ingest_text(content: str, ref_doc_id: str, user_access: list[str], met
             "id":           str(uuid.uuid4()),
             "embedding":    embedding,
             "text":         node.get_content(),
-            "metadata_":    {**node.metadata, **metadata},
+            "metadata":    {**node.metadata, **metadata},
             "node_id":      node.node_id,
             "ref_doc_id":   ref_doc_id,
             "user_access":  user_access

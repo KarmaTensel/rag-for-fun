@@ -5,6 +5,8 @@ Uses cosine distance (<=> operator) — the same similarity function
 LlamaIndex calls internally — with metadata-based ACL filtering.
 """
 
+import json
+
 from app.config import DB_TABLE_NAME
 from app.db.pool import get_pool
 
@@ -17,14 +19,14 @@ async def scoped_vector_search(
     """Cosine similarity search filtered by user_access.
 
     Matches the querying user's access list against the 'user_access'
-    array stored in each document's metadata_ during ingestion.
+    array stored in each document's metadata during ingestion.
     A document is visible if at least one value overlaps.
     """
     sql = f"""
         SELECT
             id,
             text,
-            metadata_,
+            metadata,
             node_id,
             ref_doc_id,
             user_access,
@@ -38,4 +40,10 @@ async def scoped_vector_search(
     pool = get_pool()
     rows = await pool.fetch(sql, query_embedding, user_access, top_k)
 
-    return [dict(row) for row in rows]
+    results = []
+    for row in rows:
+        d = dict(row)
+        if isinstance(d.get("metadata"), str):
+            d["metadata"] = json.loads(d["metadata"])
+        results.append(d)
+    return results

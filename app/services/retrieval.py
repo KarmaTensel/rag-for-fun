@@ -54,7 +54,7 @@ async def semantic_search(query: str, user_access: list[str], top_k: int = 7) ->
         {
             "text":       r["text"],
             "score":      round(r["score"], 4),
-            "metadata":   r["metadata_"],
+            "metadata":   r["metadata"],
             "node_id":    r["node_id"],
             "ref_doc_id": r["ref_doc_id"],
         }
