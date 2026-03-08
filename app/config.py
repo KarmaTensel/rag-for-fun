@@ -8,11 +8,11 @@ class Settings(BaseSettings):
     openai_base_url: str | None = None
     database_url: str
     embeddings_table: str = "document_embeddings"
-    embedding_model: str = "text-embedding-ada-002"
-    embedding_dim: int = 1536
-    chunk_size: int = 512
-    chunk_overlap: int = 50
-    gpt_model: str = "gpt-4o-mini"
+    embedding_model: str = "text-embedding-3-small"
+    embedding_dim: int = 768
+    chunk_size: int = 1000
+    chunk_overlap: int = 150
+    gpt_model: str = "gpt-5-mini"
     api_key: str
 
     class Config:
