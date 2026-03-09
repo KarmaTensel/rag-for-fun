@@ -39,4 +39,5 @@ def get_embed_model() -> BaseEmbedding:
     return OpenAIEmbedding(
         model=settings.embedding_model,
         api_key=settings.openai_api_key,
+        dimensions=settings.embedding_dim,
     )

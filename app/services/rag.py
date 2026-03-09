@@ -49,7 +49,7 @@ async def rag_query(query: str, user_access: list[str], top_k: int = 7, chat_his
     response = await client.chat.completions.create(
         model=settings.gpt_model,
         messages=messages,
-        temperature=0.2,
+        # temperature=0.2, ## gpt-5-mini does not support temperature tunning by design
     )
 
     return {
