@@ -1,0 +1,27 @@
+# Deploys alongside vertex-plans on Render.
+
+services:
+  - type: pserv
+    name: vertex-ai-staging
+    runtime: python
+    repo: https://github.com/Aoka-Engineering/vertex-ai
+    plan: starter
+    region: oregon
+    branch: develop
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: postgres-staging # same DB as Rails staging
+          property: connectionString
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_BASE_URL
+        sync: false
+      - key: API_KEY
+        sync: false
+      - key: PYTHON_VERSION
+        value: "3.13.0"
+      - fromGroup: vertex-ai-staging
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT # uvicorn will bind to whatever $PORT Render assigns
+    healthCheckPath: /health

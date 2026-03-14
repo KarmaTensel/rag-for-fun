@@ -1,32 +1,28 @@
 """
-DB connection for ingestion — INSERT, UPDATE, DELETE on embeddings table.
+DB operations for ingestion — INSERT, UPDATE, DELETE on embeddings table.
 LlamaIndex never uses this connection.
 
 Note: Table and extension setup is handled by setup.sql, not here.
 """
 
-import psycopg
-from psycopg.types.json import Jsonb
+import json
 
-from app.config import settings, DB_TABLE_NAME
-
-
-def get_conn():
-    return psycopg.connect(settings.database_url)
+from app.config import DB_TABLE_NAME
+from app.db.pool import get_pool
 
 
-def insert_nodes(nodes: list[dict]):
+async def insert_nodes(nodes: list[dict]):
     if not nodes:
         return
 
     sql = f"""
         INSERT INTO {DB_TABLE_NAME}
-            (id, embedding, text, metadata_, node_id, ref_doc_id, user_access)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
+            (id, embedding, text, metadata, node_id, ref_doc_id, user_access)
+        VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7)
         ON CONFLICT (id) DO UPDATE SET
             embedding   = EXCLUDED.embedding,
             text        = EXCLUDED.text,
-            metadata_   = EXCLUDED.metadata_,
+            metadata   = EXCLUDED.metadata,
             node_id     = EXCLUDED.node_id,
             ref_doc_id  = EXCLUDED.ref_doc_id,
             user_access = EXCLUDED.user_access
@@ -37,7 +33,7 @@ def insert_nodes(nodes: list[dict]):
             n["id"],
             n["embedding"],
             n["text"],
-            Jsonb(n["metadata_"]),
+            json.dumps(n["metadata"]),
             n["node_id"],
             n["ref_doc_id"],
             n["user_access"],
@@ -45,14 +41,11 @@ def insert_nodes(nodes: list[dict]):
         for n in nodes
     ]
 
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.executemany(sql, rows)
-        conn.commit()
+    pool = get_pool()
+    await pool.executemany(sql, rows)
 
 
-def delete_doc_nodes(ref_doc_id: str):
-    sql = f"DELETE FROM {DB_TABLE_NAME} WHERE ref_doc_id = %s"
-    with get_conn() as conn:
-        conn.execute(sql, (ref_doc_id,))
-        conn.commit()
+async def delete_doc_nodes(ref_doc_id: str):
+    sql = f"DELETE FROM {DB_TABLE_NAME} WHERE ref_doc_id = $1"
+    pool = get_pool()
+    await pool.execute(sql, ref_doc_id)

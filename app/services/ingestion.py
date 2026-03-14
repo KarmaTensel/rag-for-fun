@@ -20,11 +20,17 @@ import uuid
 import tempfile
 from pathlib import Path
 
+from openai import AsyncOpenAI
 from llama_index.core import SimpleDirectoryReader
 from llama_index.core.node_parser import SentenceSplitter, SemanticSplitterNodeParser
 from llama_index.core.schema import TextNode, Document
 from app.config import settings, get_embed_model
 from app.db.write_conn import insert_nodes, delete_doc_nodes
+
+llm_client = AsyncOpenAI(
+    api_key=settings.openai_api_key,
+    base_url=settings.openai_base_url,
+)
 
 SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt", ".md", ".csv", ".html"}
 
@@ -178,7 +184,7 @@ async def ingest_file(filename: str, file_bytes: bytes, user_access: list[str], 
         raise ValueError("No content could be extracted from the file.")
 
     ref_doc_id = filename
-    delete_doc_nodes(ref_doc_id)
+    await delete_doc_nodes(ref_doc_id)
 
     if ext == ".pdf":
         nodes = _split_with_table_awareness(documents)
@@ -197,13 +203,13 @@ async def ingest_file(filename: str, file_bytes: bytes, user_access: list[str], 
             "id":        str(uuid.uuid4()),
             "embedding": embedding,
             "text":      node.get_content(),
-            "metadata_":    {**node.metadata, "filename": filename, **metadata},
+            "metadata":    {**node.metadata, "filename": filename, **metadata},
             "node_id":      node.node_id,
             "ref_doc_id":   ref_doc_id,
             "user_access":  user_access
         })
 
-    insert_nodes(rows)
+    await insert_nodes(rows)
 
     return {
         "filename":   filename,
@@ -213,15 +219,38 @@ async def ingest_file(filename: str, file_bytes: bytes, user_access: list[str], 
     }
 
 
+REFINE_PROMPT = (
+    "You are a data-preparation assistant. "
+    "Rewrite the following raw structured data into clear, fluent natural-language sentences. "
+    "Preserve every fact — do not add, infer, or omit information. "
+    "Output only the rewritten text, nothing else."
+)
+
+
+async def refine_text_for_embedding(raw_text: str) -> str:
+    """Use an LLM to rephrase raw structured text into natural language."""
+    response = await llm_client.chat.completions.create(
+        model=settings.gpt_model,
+        messages=[
+            {"role": "system", "content": REFINE_PROMPT},
+            {"role": "user", "content": raw_text},
+        ],
+        temperature=0,
+    )
+    return response.choices[0].message.content
+
+
 async def ingest_text(content: str, ref_doc_id: str, user_access: list[str], metadata: dict = {}) -> dict:
     if not content.strip():
         raise ValueError("Content cannot be empty.")
     if not ref_doc_id.strip():
         raise ValueError("ref_doc_id cannot be empty.")
 
-    document = Document(text=content, metadata={"ref_doc_id": ref_doc_id, **metadata})
+    refined_content = await refine_text_for_embedding(content)
 
-    delete_doc_nodes(ref_doc_id)
+    document = Document(text=refined_content, metadata={"ref_doc_id": ref_doc_id, **metadata})
+
+    await delete_doc_nodes(ref_doc_id)
 
     nodes = splitter.get_nodes_from_documents([document])
 
@@ -237,13 +266,13 @@ async def ingest_text(content: str, ref_doc_id: str, user_access: list[str], met
             "id":           str(uuid.uuid4()),
             "embedding":    embedding,
             "text":         node.get_content(),
-            "metadata_":    {**node.metadata, **metadata},
+            "metadata":    {**node.metadata, **metadata},
             "node_id":      node.node_id,
             "ref_doc_id":   ref_doc_id,
             "user_access":  user_access
         })
 
-    insert_nodes(rows)
+    await insert_nodes(rows)
 
     return {
         "ref_doc_id": ref_doc_id,

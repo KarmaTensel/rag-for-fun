@@ -21,6 +21,7 @@ If the user refers to something from the conversation history, use it to underst
 async def rag_query(query: str, user_access: list[str], top_k: int = 7, chat_history: list[dict] | None = None) -> dict:
     chunks = await semantic_search(query, user_access=user_access, top_k=top_k)
 
+    """ TODO: to decide whether to give a generic answer if no chunks found """
     if not chunks:
         return {
             "answer":  "No relevant documents found. Please ingest documents first.",
@@ -48,7 +49,7 @@ async def rag_query(query: str, user_access: list[str], top_k: int = 7, chat_his
     response = await client.chat.completions.create(
         model=settings.gpt_model,
         messages=messages,
-        temperature=0.2,
+        # temperature=0.2, ## gpt-5-mini does not support temperature tunning by design
     )
 
     return {

@@ -172,7 +172,7 @@ CREATE TABLE data_document_embeddings (
     id          VARCHAR PRIMARY KEY,
     embedding   VECTOR(1536),       -- ada-002 dimensions
     text        TEXT NOT NULL,
-    metadata_   JSONB,
+    metadata   JSONB,
     user_access TEXT[],
     node_id     VARCHAR,
     ref_doc_id  VARCHAR             -- maps to original filename
